@@ -1,0 +1,20 @@
+--- openmpmpibench_C.orig/Makefile	2012-08-23 10:20:27.000000000 -0400
++++ openmpmpibench_C/Makefile	2017-05-31 16:35:15.760568423 -0400
+@@ -6,8 +6,8 @@
+ # then type 'make'.                              #
+ #------------------------------------------------#
+ 
+-CC=
+-CFLAGS=	
++CC=mpicc
++CFLAGS=-fopenmp -O3
+ 
+ #--------------------------------------#
+ # Build rules                          #
+@@ -65,4 +65,4 @@
+ $(OBJ):	$(INC) $(MF)
+ 
+ clean:
+-	rm -f $(OBJ) $(EXE) core 
+\ No newline at end of file
++	rm -f $(OBJ) $(EXE) core 

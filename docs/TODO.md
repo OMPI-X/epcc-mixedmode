@@ -1,0 +1,15 @@
+TODO
+----
+ - [x] Setup repo
+ - [x] Fix compiliation errors
+ - [x] Create helper run script
+ - [x] Create input files
+ - [x] Create basic setup/running notes
+ - [x] Run (most) tests on single host `-t 2 -r 2 -f SOMETESTS_FAST` (linux desktop)
+ - [ ] Run tests on single host `-t 2 -r 2 -f ALLTESTS_FAST` (linux desktop)
+ - [x] Run tests on two host `-t 2 -r 2 -f ALLTESTS_FAST` (linux cluster)
+ - [ ] Fix correctness errors with `-t 4 -r 2 -f FIXME_1`
+ - [ ] Generate graphs for linux cluster test
+ - [ ] Setup/Build on SummitDev
+ - [ ] Run tests on two host of SummitDev `-t 2 -r 2 -f ALLTESTS_FAST` (summitdev)
+ - [ ] Generate graphs for SummitDev test

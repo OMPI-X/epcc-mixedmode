@@ -1,0 +1,4 @@
+# Barrier benchmark.
+# Using 2 MPI processes and 4 OpenMP threads 
+# Procs 	 Threads 	 Time/Rep
+2	4	0.000001

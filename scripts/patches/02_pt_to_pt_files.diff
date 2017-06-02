@@ -1,0 +1,158 @@
+--- openmpmpibench_C.orig/collective_reduction.c	2012-08-23 10:20:27.000000000 -0400
++++ openmpmpibench_C/collective_reduction.c	2017-05-31 19:57:07.784542837 -0400
+@@ -211,7 +211,7 @@
+ 		 * the MPI processes.
+ 		 */
+ 		 MPI_Allreduce(localReduceBuf, globalReduceBuf, \
+-				 dataSize, MPI_INTEGER, MPI_SUM, comm);
++				 dataSize, MPI_INT, MPI_SUM, comm);
+ 
+ 		 /* Each thread copies globalReduceBuf into its portion
+ 		  * of finalReduceBuf.
+--- openmpmpibench_C.orig/pt_to_pt_haloexchange.c	2012-08-23 10:20:27.000000000 -0400
++++ openmpmpibench_C/pt_to_pt_haloexchange.c	2017-05-31 18:36:45.068553025 -0400
+@@ -203,6 +203,7 @@
+ 	/* Open the parallel region */
+ #pragma omp parallel default(none) \
+ 	private(i,repIter) \
++    shared(ompi_mpi_comm_world,ompi_mpi_int) \
+ 	shared(dataSize,sizeofBuffer,leftSendBuf,rightSendBuf) \
+ 	shared(rightRecvBuf,leftRecvBuf,finalLeftBuf,finalRightBuf) \
+ 	shared(globalIDarray,commCart,totalReps,requestArray,statusArray) \
+@@ -273,6 +274,7 @@
+ 	/* Open the parallel region */
+ #pragma omp parallel default(none) \
+ 	private(i,requestArray,statusArray,lBound,repIter) \
++    shared(ompi_mpi_comm_world,ompi_mpi_int) \
+ 	shared(dataSize,sizeofBuffer,leftSendBuf,rightSendBuf) \
+ 	shared(rightRecvBuf,leftRecvBuf,finalLeftBuf,finalRightBuf) \
+ 	shared(leftNeighbour,rightNeighbour,globalIDarray,commCart,totalReps)
+--- openmpmpibench_C.orig/pt_to_pt_multiPingping.c	2012-08-23 10:20:27.000000000 -0400
++++ openmpmpibench_C/pt_to_pt_multiPingping.c	2017-05-31 18:36:45.068553025 -0400
+@@ -263,6 +263,7 @@
+   /* Open the parallel region */
+ #pragma omp parallel default(none)				\
+   private(i,repIter)						\
++  shared(ompi_mpi_comm_world,ompi_mpi_int) \
+   shared(dataSize,sizeofBuffer,pingSendBuf,globalIDarray)	\
+   shared(pingRecvBuf,finalRecvBuf,status,requestID,destRank)	\
+   shared(crossComm,crossCommRank,pingNodeA,pingNodeB,totalReps)
+@@ -335,6 +336,7 @@
+   /* Open parallel region */
+ #pragma omp parallel default(none)				\
+   private(i,repIter,lBound,requestID,status)			\
++  shared(ompi_mpi_comm_world,ompi_mpi_int) \
+   shared(dataSize,sizeofBuffer,pingSendBuf,globalIDarray)	\
+   shared(pingRecvBuf,finalRecvBuf,destRank,crossComm)		\
+   shared(crossCommRank,pingNodeA,pingNodeB,totalReps)
+--- openmpmpibench_C.orig/pt_to_pt_multiPingpong.c	2012-08-23 10:20:27.000000000 -0400
++++ openmpmpibench_C/pt_to_pt_multiPingpong.c	2017-05-31 18:36:45.068553025 -0400
+@@ -270,6 +270,7 @@
+ 	/* Open the parallel region for threads */
+ #pragma omp parallel default(none) \
+ 	private(i,repIter) \
++    shared(ompi_mpi_comm_world,ompi_mpi_int) \
+ 	shared(pingNode,pongNode,pingSendBuf,pingRecvBuf) \
+ 	shared(pongSendBuf,pongRecvBuf,finalRecvBuf,sizeofBuffer) \
+ 	shared(dataSize,globalIDarray,crossComm,status) \
+@@ -370,6 +371,7 @@
+ 	/* Open parallel region for threads */
+ #pragma omp parallel default(none) \
+ 	private(i,repIter,status,lBound) \
++    shared(ompi_mpi_comm_world,ompi_mpi_int) \
+ 	shared(pingNode,pongNode,pingSendBuf,pingRecvBuf) \
+ 	shared(pongSendBuf,pongRecvBuf,finalRecvBuf,sizeofBuffer) \
+ 	shared(dataSize,globalIDarray,crossComm) \
+--- openmpmpibench_C.orig/pt_to_pt_pingping.c	2012-08-23 10:20:27.000000000 -0400
++++ openmpmpibench_C/pt_to_pt_pingping.c	2017-05-31 18:36:45.068553025 -0400
+@@ -171,6 +171,7 @@
+ 			 */
+ #pragma omp parallel for default(none) \
+ 	private(i) \
++    shared(ompi_mpi_comm_world,ompi_mpi_int) \
+ 	shared(pingSendBuf,dataSize,sizeofBuffer,globalIDarray) \
+ 	schedule(static,dataSize)
+ 			for (i=0; i<sizeofBuffer; i++){
+@@ -195,6 +196,7 @@
+ 			 */
+ #pragma omp parallel for default(none) \
+ 	private(i) \
++    shared(ompi_mpi_comm_world,ompi_mpi_int) \
+ 	shared(finalRecvBuf,dataSize,sizeofBuffer,pingRecvBuf) \
+ 	schedule(static,dataSize)
+ 			for (i=0; i<sizeofBuffer; i++){
+@@ -229,6 +231,7 @@
+ 	/* Open the parallel region */
+ #pragma omp parallel default(none) \
+ 	private(i, repIter) \
++    shared(ompi_mpi_comm_world,ompi_mpi_int) \
+ 	shared(dataSize,sizeofBuffer,pingSendBuf,globalIDarray) \
+ 	shared(pingRecvBuf,finalRecvBuf,status,requestID) \
+ 	shared(destRank,comm,myMPIRank,pingRankA,pingRankB,totalReps)
+@@ -300,6 +303,7 @@
+     /* Open parallel region */
+ #pragma omp parallel default(none) \
+ 	private(i,lBound,requestID,status,repIter) \
++    shared(ompi_mpi_comm_world,ompi_mpi_int) \
+ 	shared(pingSendBuf,pingRecvBuf,finalRecvBuf,sizeofBuffer) \
+ 	shared(destRank,myMPIRank,pingRankA,pingRankB,totalReps) \
+ 	shared(dataSize,globalIDarray,comm)
+--- openmpmpibench_C.orig/pt_to_pt_pingpong.c	2012-08-23 10:20:27.000000000 -0400
++++ openmpmpibench_C/pt_to_pt_pingpong.c	2017-05-31 19:40:54.272544894 -0400
+@@ -39,7 +39,6 @@
+ /*-----------------------------------------------------------*/
+ #include "pt_to_pt_pingpong.h"
+ 
+-
+ /*-----------------------------------------------------------*/
+ /* pingPong                                    				 */
+ /*                                                           */
+@@ -161,6 +160,7 @@
+ 		if (myMPIRank == pingRank){
+ #pragma omp parallel for default(none) \
+ 	private(i) \
++    shared(ompi_mpi_comm_world,ompi_mpi_int) \
+ 	shared(pingSendBuf,dataSize,sizeofBuffer,globalIDarray) \
+ 	schedule(static,dataSize)
+ 
+@@ -181,6 +181,7 @@
+ 
+ #pragma omp parallel for default(none) \
+ 	private(i) \
++    shared(ompi_mpi_comm_world,ompi_mpi_int) \
+ 	shared(pongRecvBuf,finalRecvBuf,dataSize,sizeofBuffer) \
+ 	schedule(static,dataSize)
+ 			for(i=0; i<sizeofBuffer; i++){
+@@ -197,6 +198,7 @@
+ 			 */
+ #pragma omp parallel for default(none) \
+ 	private(i) \
++    shared(ompi_mpi_comm_world,ompi_mpi_int) \
+         shared(pongSendBuf,pingRecvBuf,dataSize,sizeofBuffer) \
+ 	schedule(static,dataSize)
+ 			for(i=0; i< sizeofBuffer; i++){
+@@ -204,7 +206,7 @@
+ 			}
+ 
+ 			/* pongRank process now sends pongSendBuf to ping process. */
+-			MPI_Send(pongSendBuf, sizeofBuffer, MPI_INTEGER, pingRank, \
++			MPI_Send(pongSendBuf, sizeofBuffer, MPI_INT, pingRank, \
+ 					TAG, comm);
+ 		}
+ 	}
+@@ -228,6 +230,7 @@
+ 	/* Open parallel region for threads */
+ #pragma omp parallel default(none) \
+ 	private(i,repIter) \
++    shared(ompi_mpi_comm_world,ompi_mpi_int) \
+ 	shared(pingRank,pongRank,pingSendBuf,pingRecvBuf) \
+ 	shared(pongSendBuf,pongRecvBuf,finalRecvBuf,sizeofBuffer) \
+ 	shared(dataSize,globalIDarray,comm,status,totalReps,myMPIRank)
+@@ -315,6 +318,7 @@
+ 	/* Open parallel region for threads under pingRank */
+ #pragma omp parallel default(none) \
+ 	private(i,repIter,lBound) \
++    shared(ompi_mpi_comm_world,ompi_mpi_int) \
+ 	shared(pingRank,pongRank,pingSendBuf,pingRecvBuf) \
+ 	shared(pongSendBuf,pongRecvBuf,finalRecvBuf,sizeofBuffer) \
+ 	shared(dataSize,globalIDarray,comm,status,totalReps,myMPIRank)
