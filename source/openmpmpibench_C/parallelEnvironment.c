@@ -37,8 +37,18 @@
 /* environment.                                              */
 /* Header file = parallelEnvironment.h                       */
 /*-----------------------------------------------------------*/
+#define _GNU_SOURCE
 #include "parallelEnvironment.h"
 #include "output.h"
+#include <pmix.h>
+#include <unistd.h>
+#include <stdio.h>
+
+#define PMIX_PROGRAMMING_MODEL      "pmix.pgm.model"        // (char*) programming model being initialized (e.g., "MPI" or "OpenMP")
+#define PMIX_MODEL_LIBRARY_NAME     "pmix.mdl.name"         // (char*) programming model implementation ID (e.g., "OpenMPI" or "MPICH")
+#define PMIX_MODEL_LIBRARY_VERSION  "pmix.mld.vrs"          // (char*) programming model version string (e.g., "2.1.1")
+#define PMIX_THREADING_MODEL        "pmix.threads"          // (char*) threading model used (e.g., "pthreads")
+#define PMIX_LOCAL_SIZE             "pmix.local.size"
 
 /*-----------------------------------------------------------*/
 /* initParallelEnv			                                 */
@@ -49,10 +59,179 @@
 /* Also finds the ID of each MPI process and OpenMP thread.  */
 /*-----------------------------------------------------------*/
 
-int initParallelEnv(){
+typedef struct {
+    pmix_info_t *info;
+    size_t      ninfo;
+    int         *active;
+    char        *nspace;
+} mydata_t;
 
-	/* Setup MPI programming environment */
-	MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &threadSupport);
+int active  = -1;
+int ready   = -1;
+int all_set = -1;
+pmix_proc_t myproc;
+
+uint32_t    n_node_local_ranks = 0;
+
+static void release_fn(size_t evhdlr_registration_id,
+                       pmix_status_t status,
+                       const pmix_proc_t *source,
+                       pmix_info_t info[], size_t ninfo,
+                       pmix_info_t results[], size_t nresults,
+                       pmix_event_notification_cbfunc_fn_t cbfunc,
+                       void *cbdata)
+{
+    /* tell the event handler state machine that we are the last step */
+    if (NULL != cbfunc) {
+        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+    }
+
+    /* do whatever we want/need to do to coordinate */
+}
+
+static void
+info_event_cb (pmix_status_t status, void *cbdata)
+{
+    mydata_t        *cd     = (mydata_t*)cbdata;
+    size_t          n_keys;
+    int             i;
+    pmix_proc_t     proc;
+    pmix_value_t    *val    = NULL;
+
+    //fprintf (stdout, "%s - Start\n", __func__);
+
+    n_keys = cd->ninfo;
+    //fprintf (stdout, "%s - Nb of info keys: %d\n", __func__, (int)n_keys);
+    for (i = 0; i < n_keys; i++)
+    {
+        //fprintf (stdout, "%s - %s/%s\n", __func__, cd->info[i].key, cd->info[i].value.data.string);
+        if (strcmp (cd->info[i].key, "pmix.pgm.model") == 0 &&
+            strcmp (cd->info[i].value.data.string, "OpenMP") == 0)
+        {
+            fprintf (stdout, "%s - Just detected an OpenMP runtime!!\n", __func__);
+        }
+
+        if (strcmp (cd->info[i].key, "pmix.local.size") == 0)
+        {
+            n_node_local_ranks = cd->info[i].value.data.uint32;
+            fprintf (stdout, "%s - Just detected the number of node local MPI ranks: %d\n", __func__, (int)n_node_local_ranks);
+        }
+    }    
+    PMIX_INFO_FREE (cd->info, cd->ninfo);
+    free (cd);
+
+    //fprintf (stdout, "%s - End\n", __func__);
+}
+
+static void
+mpiinfo_event_cb (pmix_status_t status, void *cbdata)
+{
+    mydata_t    *cd = (mydata_t*)cbdata;
+    
+}
+
+static void
+evhandler_reg_callbk_2 (pmix_status_t status, size_t evhandler_ref, void *cbdata)
+{
+   ready = 1; 
+}
+
+static void
+evhandler_reg_callbk (pmix_status_t status, size_t evhandler_ref, void *cbdata)
+{
+    char            *prog_model = NULL;
+    pmix_proc_t     proc;
+    pmix_value_t    *val        = NULL;
+    pmix_rank_t     npeers;
+
+    active = status;
+    fprintf (stdout, "%s - Start\n", __func__);
+
+#if 0
+    PMIX_PROC_CONSTRUCT (&proc);
+    (void)strncpy (proc.nspace, myproc.nspace, PMIX_MAX_NSLEN);
+    proc.rank = PMIX_RANK_WILDCARD;
+
+    fprintf (stdout, "%s - Getting PMIX_PROGRAMMING_MODEL\n", __func__);
+    PMIx_Get (&proc, PMIX_PROGRAMMING_MODEL, NULL, 0, &val);
+    if (val == NULL)
+    {
+        fprintf (stderr, "PMIX_PROGRAMMING_MODEL undefined\n");
+    } else {
+        prog_model = val->data.string;
+        fprintf (stdout, "PMIX_PROGRAMMING_MODEL: %s\n", prog_model);
+    }
+
+    fprintf (stdout, "%s - Getting PMIX_LOCAL_SIZE\n", __func__);
+    PMIx_Get (&proc, PMIX_LOCAL_SIZE, NULL, 0, &val);
+    if (val == NULL)
+    {
+        fprintf (stderr, "PMIX_LOCAL_SIZE undefined\n");
+    } else {
+        npeers = val->data.uint32;
+        fprintf (stdout, "PMIX_LOCAL_SIZE: %d\n", (int)npeers);
+    }
+#endif
+
+    fprintf (stdout, "%s - End\n", __func__);
+}
+
+int initParallelEnv(){
+    int             i;
+    int             numCPU;
+    mydata_t        *mpi_data;
+    mydata_t        *proc_data;
+    pmix_status_t   rc;
+    uint32_t        node_local_procs    = 0;
+    pmix_info_t     *mpi_info;
+    char            *mpi_model          = "MPI";
+    char            *mpi_modelname      = "openMPI";
+    char            *mpi_version        = "master";
+    pmix_status_t   code                = PMIX_MODEL_DECLARED;
+    char            *s_procNames        = NULL;
+    char            *r_procNames        = NULL;
+    char            *n_threads_str      = NULL;
+
+    /* Setup MPI programming environment */
+    PMIx_Init (&myproc, NULL, 0);
+
+    MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &threadSupport);
+    fprintf (stderr, "[%s:%d:%s] Check\n", __FILE__, __LINE__, __func__);
+
+    /* Find the processor name of each MPI process */
+    MPI_Get_processor_name(myProcName, &procNameLen);
+
+    mpi_data = (mydata_t*) malloc (sizeof (mydata_t));
+
+    /* Register a handler specifically for notifying us if other programming models declare themselves */
+    active = -1;
+    mpi_data->active = &active;
+    //mpi_data->nspace = 
+    PMIx_Register_event_handler (&code, 1, NULL, 0, release_fn, evhandler_reg_callbk, NULL);
+    fprintf (stderr, "[%s:%d:%s] Check\n", __FILE__, __LINE__, __func__);
+
+#if 0
+    /* Setup to declare our programming model */
+    mpi_data = (mydata_t*) malloc (sizeof (mydata_t));
+    mpi_data->ninfo = 3;
+    PMIX_INFO_CREATE (mpi_data->info, mpi_data->ninfo);
+    PMIX_INFO_LOAD (&mpi_data->info[0], PMIX_PROGRAMMING_MODEL, mpi_model, PMIX_STRING);
+    PMIX_INFO_LOAD (&mpi_data->info[1], PMIX_MODEL_LIBRARY_NAME, mpi_modelname, PMIX_STRING);
+    PMIX_INFO_LOAD (&mpi_data->info[2], PMIX_MODEL_LIBRARY_VERSION, mpi_version, PMIX_STRING);
+    fprintf (stderr, "[%s:%d:%s] Check\n", __FILE__, __LINE__, __func__);
+
+    PMIx_Notify_event (PMIX_MODEL_DECLARED, NULL, PMIX_RANGE_PROC_LOCAL, mpi_data->info, mpi_data->ninfo, info_event_cb, (void*)mpi_data);
+#endif
+    fprintf (stdout, "Client ns %s rank %d: Running\n", myproc.nspace, myproc.rank);
+
+#if 0
+    while (-1 == active)
+        usleep (10);
+
+    fprintf (stderr, "[%s:%d:%s] Check\n", __FILE__, __LINE__, __func__);
+    if (0 != active)
+        exit (active);
+#endif
 
 	comm = MPI_COMM_WORLD;
 	MPI_Comm_size(comm, &numMPIprocs);
@@ -64,17 +243,123 @@ int initParallelEnv(){
 	/* Find the processor name of each MPI process */
 	MPI_Get_processor_name(myProcName, &procNameLen);
 
-	/* Use processor name to create a communicator
-	 * across node boundaries.
-	 */
-	setupCommunicators();
+    /* Use processor name to create a communicator
+     * across node boundaries.
+     */
+    setupCommunicators();
+
+    /* Figure out the nunber of ranks on the node */
+    /* Not portable but good enough for now */
+    s_procNames = (char*) malloc (procNameLen * numMPIprocs);
+    for (i = 0; i < numMPIprocs; i++)
+    {
+        strncpy (&s_procNames[i*procNameLen], myProcName, procNameLen);
+    }
+    r_procNames = (char*) malloc (procNameLen * numMPIprocs);
+    MPI_Alltoall (s_procNames, procNameLen, MPI_CHAR,
+                  r_procNames, procNameLen, MPI_CHAR,
+                  comm);
+    for (i = 0; i < numMPIprocs; i++)
+    {
+        if (strncmp (&r_procNames[i*procNameLen], myProcName, procNameLen) == 0)
+        {
+            node_local_procs++;
+        }
+    }
+
+    /* Figure out the number of processors */
+    numCPU = sysconf (_SC_NPROCESSORS_ONLN);
+    printf ("numCPU: %d\n", numCPU);
+
+    asprintf (&n_threads_str, "%d", (int)(numCPU - node_local_procs));
+    setenv ("OMP_NUM_THREADS", n_threads_str, 1); 
+    free (n_threads_str);
+    n_threads_str = NULL;
+
+    /* Setup to declare our programming model */
+    mpi_data = (mydata_t*) malloc (sizeof (mydata_t));
+    mpi_data->ninfo = 4;
+    PMIX_INFO_CREATE (mpi_data->info, mpi_data->ninfo);
+    PMIX_INFO_LOAD (&mpi_data->info[0], PMIX_PROGRAMMING_MODEL, mpi_model, PMIX_STRING);
+    PMIX_INFO_LOAD (&mpi_data->info[1], PMIX_MODEL_LIBRARY_NAME, mpi_modelname, PMIX_STRING);
+    PMIX_INFO_LOAD (&mpi_data->info[2], PMIX_MODEL_LIBRARY_VERSION, mpi_version, PMIX_STRING);
+    PMIX_INFO_LOAD (&mpi_data->info[3], PMIX_LOCAL_SIZE, &node_local_procs, PMIX_UINT32);
+    fprintf (stderr, "[%s:%d:%s] Check\n", __FILE__, __LINE__, __func__);
+
+    PMIx_Notify_event (PMIX_MODEL_DECLARED, NULL, PMIX_RANGE_PROC_LOCAL, mpi_data->info, mpi_data->ninfo, info_event_cb, (void*)mpi_data);
+
+    while (-1 == active)
+        usleep (10);
+    if (0 != active)
+        exit (active);
+#if 0
+    PMIx_Register_event_handler (&code, 1, NULL, 0, release_fn, evhandler_reg_callbk_2, NULL);
+
+    proc_data = (mydata_t*) malloc (sizeof (mydata_t));
+    proc_data->ninfo = 1;
+    PMIX_INFO_CREATE (proc_data->info, proc_data->ninfo);
+    PMIX_INFO_LOAD (&proc_data->info[0], PMIX_LOCAL_SIZE, &node_local_procs, PMIX_UINT32);
+
+    PMIx_Notify_event (PMIX_MODEL_DECLARED, NULL, PMIX_RANGE_PROC_LOCAL, proc_data->info, proc_data->ninfo, mpiinfo_event_cb, (void*)proc_data);
+#endif
+    
+
+    free (r_procNames);
+    free (s_procNames);
+    r_procNames = NULL;
+    s_procNames = NULL;
+
+/*
+    while (-1 == ready)
+        usleep (10);
+*/
 
 	/* setup OpenMP programming environment */
+{
+        mydata_t    *omp_data;
+        char        *omp_model      = "OpenMP";
+        char        *omp_modelname  = "StdOpenMP";
+        char        *omp_version    = "TBD";
+
+        omp_data = (mydata_t*) malloc (sizeof (mydata_t));
+
+        omp_data->ninfo = 4;
+        PMIX_INFO_CREATE (omp_data->info, omp_data->ninfo);
+        PMIX_INFO_LOAD (&omp_data->info[0], PMIX_PROGRAMMING_MODEL, omp_model, PMIX_STRING);
+        PMIX_INFO_LOAD (&omp_data->info[1], PMIX_MODEL_LIBRARY_NAME, omp_modelname, PMIX_STRING);
+        PMIX_INFO_LOAD (&omp_data->info[2], PMIX_MODEL_LIBRARY_VERSION, omp_version, PMIX_STRING);
+        PMIX_INFO_LOAD (&omp_data->info[3], PMIX_THREADING_MODEL, "openmp", PMIX_STRING);
+
+        PMIx_Notify_event (PMIX_MODEL_DECLARED, NULL, PMIX_RANGE_PROC_LOCAL, omp_data->info, omp_data->ninfo, info_event_cb, (void*)omp_data);
+
+        if (n_node_local_ranks > 0)
+        {
+            numThreads = numCPU - n_node_local_ranks;
+            omp_set_dynamic (0);
+            omp_set_num_threads (numThreads);
+        }
+}
 #pragma omp parallel default(none) \
-shared(numThreads,globalIDarray,myMPIRank)
+shared(numThreads,globalIDarray,myMPIRank,n_node_local_ranks,numCPU)
    {
-	   numThreads = omp_get_num_threads();
-	   myThreadID = omp_get_thread_num();
+        mydata_t    *omp_data;
+        char        *omp_model      = "OpenMP";
+        char        *omp_modelname  = "StdOpenMP";
+        char        *omp_version    = "TBD";
+
+        omp_data = (mydata_t*) malloc (sizeof (mydata_t));
+
+        omp_data->ninfo = 4;
+        PMIX_INFO_CREATE (omp_data->info, omp_data->ninfo);
+        PMIX_INFO_LOAD (&omp_data->info[0], PMIX_PROGRAMMING_MODEL, omp_model, PMIX_STRING);
+        PMIX_INFO_LOAD (&omp_data->info[1], PMIX_MODEL_LIBRARY_NAME, omp_modelname, PMIX_STRING);
+        PMIX_INFO_LOAD (&omp_data->info[2], PMIX_MODEL_LIBRARY_VERSION, omp_version, PMIX_STRING);
+        PMIX_INFO_LOAD (&omp_data->info[3], PMIX_THREADING_MODEL, "openmp", PMIX_STRING);
+
+        PMIx_Notify_event (PMIX_MODEL_DECLARED, NULL, PMIX_RANGE_PROC_LOCAL, omp_data->info, omp_data->ninfo, info_event_cb, (void*)omp_data);
+
+	    numThreads = omp_get_num_threads();
+	    myThreadID = omp_get_thread_num();
 
 	   /* Allocate space for globalIDarray */
 #pragma omp single

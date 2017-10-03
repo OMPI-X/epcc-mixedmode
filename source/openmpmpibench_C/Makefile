@@ -6,8 +6,8 @@
 # then type 'make'.                              #
 #------------------------------------------------#
 
-CC=
-CFLAGS=	
+CC=mpicc
+CFLAGS=-fopenmp -O3 -g
 
 #--------------------------------------#
 # Build rules                          #
@@ -60,7 +60,7 @@ OBJ=	$(SRC:.c=.o)
 all:	$(EXE)
 
 $(EXE):	$(OBJ)
-	$(CC) $(CFLAGS) -o $@ $(OBJ) $(LFLAGS)
+	$(CC) $(CFLAGS) -o $@ $(OBJ) $(LFLAGS) -lpmix
 
 $(OBJ):	$(INC) $(MF)
 
